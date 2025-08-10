@@ -9,6 +9,7 @@ namespace IconController
 {
     public partial class HiddenForm : Form
     {
+        // 定义所有必需的常量
         private const int WM_HOTKEY = 0x0312;
         private const int HOTKEY_ID = 9000;
         private const int MOD_ALT = 0x0001;
@@ -22,14 +23,15 @@ namespace IconController
         private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
         
         [DllImport("shell32.dll")]
-        private static extern int SHChangeNotify(int wEventId, uint uFlags, IntPtr dwItem1, IntPtr dwItem2);
+        private static extern void SHChangeNotify(int wEventId, int uFlags, IntPtr dwItem1, IntPtr dwItem2);
         
         [DllImport("user32.dll")]
         private static extern int GetLastError();
         
-        private const uint SHCNE_ASSOCCHANGED = 0x08000000;
-        private const uint SHCNF_IDLIST = 0x0000;
-        private const uint SHCNF_FLUSH = 0x1000;
+        // 正确的刷新参数
+        private const int SHCNE_ASSOCCHANGED = 0x08000000;
+        private const int SHCNF_IDLIST = 0x0000;
+        private const int SHCNF_FLUSH = 0x1000;
         
         public HiddenForm()
         {
@@ -45,7 +47,7 @@ namespace IconController
                 Program.debugWindow.AddLog("隐藏窗口初始化完成");
             }
             
-            // 注册热键
+            // 注册事件处理程序
             this.Load += new EventHandler(OnFormLoad);
             this.FormClosing += new FormClosingEventHandler(OnFormClosing);
         }
@@ -183,7 +185,7 @@ namespace IconController
             try
             {
                 // 方法1: 发送桌面刷新通知
-                SHChangeNotify((int)SHCNE_ASSOCCHANGED, SHCNF_IDLIST | SHCNF_FLUSH, IntPtr.Zero, IntPtr.Zero);
+                SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST | SHCNF_FLUSH, IntPtr.Zero, IntPtr.Zero);
                 if (Program.debugWindow != null)
                 {
                     Program.debugWindow.AddLog("发送桌面刷新通知 (SHChangeNotify)");
