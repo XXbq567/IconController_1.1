@@ -1,91 +1,39 @@
-using System;
-using System.Diagnostics;
-using System.Runtime.InteropServices;
-using System.Threading;
-using System.Windows.Forms;
-using System.Drawing;
-using System.IO;
-using Microsoft.Win32;
+// 添加静态引用
+private static DebugWindow debugWindow;
 
-namespace IconController
+static void Main(string[] args)
 {
-    class Program
+    // 在Application.Run之前添加
+    debugWindow = new DebugWindow();
+    debugWindow.Show(); // 默认显示调试窗口
+    
+    // 在关键位置添加日志
+    debugWindow.AddLog("程序启动");
+    debugWindow.AddLog($"单实例检查: {(createdNew ? "通过" : "已有实例运行")}");
+    
+    // ... 其他代码不变 ...
+    
+    // 在finally块添加
+    finally
     {
-        // Win32 API
-        [DllImport("user32.dll")]
-        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-        
-        private const int SW_HIDE = 0;
-        private const int SW_SHOW = 5;
-        
-        private static readonly string APP_NAME = "IconController";
-        private static readonly string REG_KEY = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
-        
-        private static Mutex mutex;
-        private static NotifyIcon trayIcon;
-        
-        [STAThread]
-        static void Main(string[] args)
-        {
-            // 隐藏控制台窗口
-            IntPtr consoleWindow = GetConsoleWindow();
-            if (consoleWindow != IntPtr.Zero)
-            {
-                ShowWindow(consoleWindow, SW_HIDE);
-            }
-            
-            // 单实例检查
-            mutex = new Mutex(true, APP_NAME, out bool createdNew);
-            if (!createdNew) return;
-            
-            // 创建托盘图标
-            CreateTrayIcon();
-            
-            // 添加到开机启动
-            AddToStartup();
-            
-            // 创建隐藏窗口并运行
-            Application.Run(new HiddenForm());
-        }
-        
-        [DllImport("kernel32.dll")]
-        private static extern IntPtr GetConsoleWindow();
-        
-        private static void CreateTrayIcon()
-        {
-            try
-            {
-                trayIcon = new NotifyIcon();
-                trayIcon.Icon = SystemIcons.Application;
-                trayIcon.Text = "桌面图标控制器 - Alt+Ctrl+Q";
-                trayIcon.Visible = true;
-                
-                // 右键菜单
-                ContextMenuStrip menu = new ContextMenuStrip();
-                
-                ToolStripMenuItem exitItem = new ToolStripMenuItem("退出");
-                exitItem.Click += (s, e) => Application.Exit();
-                menu.Items.Add(exitItem);
-                
-                trayIcon.ContextMenuStrip = menu;
-            }
-            catch { }
-        }
-        
-        private static void AddToStartup()
-        {
-            try
-            {
-                string exePath = Application.ExecutablePath;
-                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(REG_KEY, true))
-                {
-                    if (key?.GetValue(APP_NAME) == null)
-                    {
-                        key?.SetValue(APP_NAME, exePath);
-                    }
-                }
-            }
-            catch { }
-        }
+        debugWindow?.AddLog("程序退出");
     }
+}
+
+// 修改托盘菜单创建
+private static void CreateTrayIcon()
+{
+    // ... 原有代码 ...
+    
+    // 添加调试窗口菜单项
+    ToolStripMenuItem debugItem = new ToolStripMenuItem("调试窗口");
+    debugItem.Click += (s, e) => 
+    {
+        if (debugWindow != null)
+        {
+            debugWindow.Show();
+            debugWindow.BringToFront();
+        }
+    };
+    menu.Items.Add(debugItem);
 }
