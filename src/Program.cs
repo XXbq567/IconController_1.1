@@ -18,8 +18,6 @@ namespace IconController
         private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
         [DllImport("kernel32.dll")]
         private static extern IntPtr GetConsoleWindow();
-        [DllImport("shell32.dll", CharSet = CharSet.Auto)]
-        private static extern int ShellExecute(IntPtr hwnd, string lpOperation, string lpFile, string lpParameters, string lpDirectory, int nShowCmd);
         
         private const int SW_HIDE = 0;
         private const int SW_SHOW = 5;
@@ -45,36 +43,54 @@ namespace IconController
                 
                 // 创建调试窗口
                 debugWindow = new DebugWindow();
-                debugWindow.AddLog("=== IconController 启动 ===");
-                debugWindow.AddLog($"版本: {Application.ProductVersion}");
-                debugWindow.AddLog($"系统: {Environment.OSVersion.VersionString}");
+                if (debugWindow != null)
+                {
+                    debugWindow.AddLog("=== IconController 启动 ===");
+                    debugWindow.AddLog($"版本: {Application.ProductVersion}");
+                    debugWindow.AddLog($"系统: {Environment.OSVersion.VersionString}");
+                }
                 
                 // 检查是否已经是提升的实例
                 bool isElevated = args.Contains("--elevated");
-                debugWindow.AddLog($"启动参数: {string.Join(" ", args)}");
-                debugWindow.AddLog($"提升权限启动: {(isElevated ? "是" : "否")}");
+                if (debugWindow != null)
+                {
+                    debugWindow.AddLog($"启动参数: {string.Join(" ", args)}");
+                    debugWindow.AddLog($"提升权限启动: {(isElevated ? "是" : "否")}");
+                }
                 
                 // 单实例检查
                 mutex = new Mutex(true, "Global\\" + APP_NAME, out bool createdNew);
                 if (!createdNew)
                 {
-                    debugWindow.AddLog("错误: 程序已在运行中");
+                    if (debugWindow != null)
+                    {
+                        debugWindow.AddLog("错误: 程序已在运行中");
+                    }
                     MessageBox.Show("程序已在运行中，请检查系统托盘", APP_NAME, 
                         MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
                 
-                debugWindow.AddLog("单实例检查通过");
+                if (debugWindow != null)
+                {
+                    debugWindow.AddLog("单实例检查通过");
+                }
                 
                 // 检查管理员权限（如果是通过--elevated启动则跳过）
                 if (!isElevated && !IsRunAsAdmin())
                 {
-                    debugWindow.AddLog("需要管理员权限，请求提升...");
+                    if (debugWindow != null)
+                    {
+                        debugWindow.AddLog("需要管理员权限，请求提升...");
+                    }
                     RequestAdminPrivileges();
                     return;
                 }
                 
-                debugWindow.AddLog($"管理员权限: {(IsRunAsAdmin() ? "是" : "否")}");
+                if (debugWindow != null)
+                {
+                    debugWindow.AddLog($"管理员权限: {(IsRunAsAdmin() ? "是" : "否")}");
+                }
                 
                 // 创建托盘图标
                 CreateTrayIcon();
@@ -82,7 +98,10 @@ namespace IconController
                 // 添加到开机启动
                 AddToStartup();
                 
-                debugWindow.AddLog("创建隐藏窗口...");
+                if (debugWindow != null)
+                {
+                    debugWindow.AddLog("创建隐藏窗口...");
+                }
                 
                 // 创建隐藏窗口并运行
                 Application.Run(new HiddenForm());
@@ -90,16 +109,28 @@ namespace IconController
             catch (Exception ex)
             {
                 string error = $"启动失败: {ex.Message}\n\n{ex.StackTrace}";
-                debugWindow?.AddLog(error);
+                if (debugWindow != null)
+                {
+                    debugWindow.AddLog(error);
+                }
                 MessageBox.Show(error, "严重错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
-                debugWindow?.AddLog("程序退出");
-                trayIcon?.Visible = false;
-                trayIcon?.Dispose();
-                mutex?.ReleaseMutex();
-                mutex?.Dispose();
+                if (debugWindow != null)
+                {
+                    debugWindow.AddLog("程序退出");
+                }
+                if (trayIcon != null)
+                {
+                    trayIcon.Visible = false;
+                    trayIcon.Dispose();
+                }
+                if (mutex != null)
+                {
+                    mutex.ReleaseMutex();
+                    mutex.Dispose();
+                }
             }
         }
         
@@ -138,7 +169,10 @@ namespace IconController
             }
             catch (Exception ex)
             {
-                debugWindow?.AddLog($"请求管理员权限失败: {ex.Message}");
+                if (debugWindow != null)
+                {
+                    debugWindow.AddLog($"请求管理员权限失败: {ex.Message}");
+                }
                 MessageBox.Show($"请求管理员权限失败: {ex.Message}\n\n请右键点击程序，选择'以管理员身份运行'", 
                     "权限错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
@@ -149,7 +183,7 @@ namespace IconController
             try
             {
                 trayIcon = new NotifyIcon();
-                trayIcon.Icon = SystemIcons.Shield; // 使用盾牌图标表示管理员权限
+                trayIcon.Icon = SystemIcons.Shield;
                 trayIcon.Text = "桌面图标控制器 - Alt+Ctrl+Q";
                 trayIcon.Visible = true;
                 
@@ -172,17 +206,26 @@ namespace IconController
                 {
                     try
                     {
-                        debugWindow?.AddLog("手动重启资源管理器...");
+                        if (debugWindow != null)
+                        {
+                            debugWindow.AddLog("手动重启资源管理器...");
+                        }
                         foreach (var process in Process.GetProcessesByName("explorer"))
                         {
                             process.Kill();
                         }
                         Process.Start("explorer.exe");
-                        debugWindow?.AddLog("资源管理器已重启");
+                        if (debugWindow != null)
+                        {
+                            debugWindow.AddLog("资源管理器已重启");
+                        }
                     }
                     catch (Exception ex)
                     {
-                        debugWindow?.AddLog($"重启资源管理器失败: {ex.Message}");
+                        if (debugWindow != null)
+                        {
+                            debugWindow.AddLog($"重启资源管理器失败: {ex.Message}");
+                        }
                     }
                 };
                 menu.Items.Add(restartItem);
@@ -205,11 +248,17 @@ namespace IconController
                     }
                 };
                 
-                debugWindow?.AddLog("托盘图标创建成功");
+                if (debugWindow != null)
+                {
+                    debugWindow.AddLog("托盘图标创建成功");
+                }
             }
             catch (Exception ex)
             {
-                debugWindow?.AddLog($"创建托盘图标失败: {ex.Message}");
+                if (debugWindow != null)
+                {
+                    debugWindow.AddLog($"创建托盘图标失败: {ex.Message}");
+                }
             }
         }
         
@@ -218,24 +267,36 @@ namespace IconController
             try
             {
                 string exePath = Application.ExecutablePath;
-                debugWindow?.AddLog($"程序路径: {exePath}");
+                if (debugWindow != null)
+                {
+                    debugWindow.AddLog($"程序路径: {exePath}");
+                }
                 
                 using (RegistryKey key = Registry.CurrentUser.OpenSubKey(REG_KEY, true))
                 {
                     if (key?.GetValue(APP_NAME) == null)
                     {
                         key?.SetValue(APP_NAME, $"\"{exePath}\"");
-                        debugWindow?.AddLog("已添加到开机启动");
+                        if (debugWindow != null)
+                        {
+                            debugWindow.AddLog("已添加到开机启动");
+                        }
                     }
                     else
                     {
-                        debugWindow?.AddLog("开机启动项已存在");
+                        if (debugWindow != null)
+                        {
+                            debugWindow.AddLog("开机启动项已存在");
+                        }
                     }
                 }
             }
             catch (Exception ex)
             {
-                debugWindow?.AddLog($"添加开机启动失败: {ex.Message}");
+                if (debugWindow != null)
+                {
+                    debugWindow.AddLog($"添加开机启动失败: {ex.Message}");
+                }
             }
         }
     }
