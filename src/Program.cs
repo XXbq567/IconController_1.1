@@ -1,10 +1,8 @@
 using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using System.Threading;
 using System.Windows.Forms;
 using System.Drawing;
-using System.IO;
 using Microsoft.Win32;
 using System.Security.Principal;
 using System.Linq;
