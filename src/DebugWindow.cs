@@ -6,35 +6,28 @@ namespace IconController
 {
     public class DebugWindow : Form
     {
-        private TextBox logBox;
-        
+        private readonly TextBox logBox;
+
         public DebugWindow()
         {
-            this.Size = new Size(500, 400);
-            this.Text = "IconController 调试信息";
-            this.StartPosition = FormStartPosition.CenterScreen;
-            
+            Text = "IconController 调试信息";
+            Size = new Size(500, 400);
+            StartPosition = FormStartPosition.CenterScreen;
+
             logBox = new TextBox
             {
                 Multiline = true,
-                Dock = DockStyle.Fill,
+                Dock      = DockStyle.Fill,
                 ScrollBars = ScrollBars.Vertical,
-                ReadOnly = true,
-                Font = new Font("Consolas", 10),
-                BackColor = Color.Black,
-                ForeColor = Color.Lime
+                ReadOnly   = true,
+                Font       = new Font("Consolas", 10),
+                BackColor  = Color.Black,
+                ForeColor  = Color.Lime
             };
-            
-            this.Controls.Add(logBox);
-            
-            // 添加复制按钮
-            Button copyButton = new Button
-            {
-                Text = "复制日志",
-                Dock = DockStyle.Bottom,
-                Height = 30
-            };
-            copyButton.Click += (s, e) => 
+            Controls.Add(logBox);
+
+            var copyBtn = new Button { Text = "复制日志", Dock = DockStyle.Bottom, Height = 30 };
+            copyBtn.Click += (_, __) =>
             {
                 if (!string.IsNullOrEmpty(logBox.Text))
                 {
@@ -42,28 +35,21 @@ namespace IconController
                     AddLog("日志已复制到剪贴板");
                 }
             };
-            
-            this.Controls.Add(copyButton);
+            Controls.Add(copyBtn);
         }
-        
-        public void AddLog(string message)
+
+        public void AddLog(string msg)
         {
-            if (InvokeRequired)
-            {
-                Invoke(new Action(() => AddLog(message)));
-                return;
-            }
-            
-            logBox.AppendText($"[{DateTime.Now:HH:mm:ss.fff}] {message}\r\n");
+            if (InvokeRequired) { Invoke(new Action(() => AddLog(msg))); return; }
+            logBox.AppendText($"[{DateTime.Now:HH:mm:ss.fff}] {msg}\r\n");
             logBox.SelectionStart = logBox.TextLength;
             logBox.ScrollToCaret();
         }
-        
+
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            // 防止窗口关闭，只是隐藏
             e.Cancel = true;
-            this.Hide();
+            Hide();
             base.OnFormClosing(e);
         }
     }
