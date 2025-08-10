@@ -1,48 +1,57 @@
-private void OnFormLoad(object sender, EventArgs e)
-{
-    bool success = RegisterHotKey(this.Handle, HOTKEY_ID, MOD_ALT | MOD_CONTROL, VK_Q);
-    
-    // 添加热键注册结果日志
-    Program.debugWindow?.AddLog(success ? 
-        "热键注册成功" : 
-        $"热键注册失败! 错误代码: {Marshal.GetLastWin32Error()}");
-}
+name: Build and Release
 
-private void ToggleDesktopIcons()
-{
-    Program.debugWindow?.AddLog("开始切换桌面图标");
-    
-    try
-    {
-        // ... 注册表操作代码 ...
-        
-        // 添加操作结果日志
-        Program.debugWindow?.AddLog($"设置HideIcons={newValue}");
-        
-        // 增强刷新机制:cite[8]
-        SHChangeNotify(0x8000000, 0x1000, IntPtr.Zero, IntPtr.Zero);
-        RefreshExplorer();
-    }
-    catch (Exception ex)
-    {
-        Program.debugWindow?.AddLog($"操作失败: {ex.Message}");
-    }
-}
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
 
-// 添加增强的刷新方法
-private void RefreshExplorer()
-{
-    try
-    {
-        foreach (var process in Process.GetProcessesByName("explorer"))
-        {
-            process.Kill();
-        }
-        Process.Start("explorer.exe");
-        Program.debugWindow?.AddLog("资源管理器已重启");
-    }
-    catch (Exception ex)
-    {
-        Program.debugWindow?.AddLog($"重启资源管理器失败: {ex.Message}");
-    }
-}
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '6.0.x'
+
+    - name: Build
+      run: dotnet build src/IconController.csproj --configuration Release
+
+    - name: Publish
+      run: dotnet publish src/IconController.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o ./publish
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: IconController-win-x64
+        path: ./publish/IconController.exe
+
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        name: Release ${{ github.ref_name }}
+        tag_name: ${{ github.ref }}
+        body: |
+          桌面图标控制器 ${{ github.ref_name }}
+          - 一键切换桌面图标显示/隐藏
+          - 默认快捷键: Alt+Ctrl+Q
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Upload Release Asset
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./publish/IconController.exe
+        asset_name: IconController.exe
+        asset_content_type: application/octet-stream
