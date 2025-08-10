@@ -1,39 +1,232 @@
-// 添加静态引用
-private static DebugWindow debugWindow;
+using System;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Threading;
+using System.Windows.Forms;
+using System.Drawing;
+using System.IO;
+using Microsoft.Win32;
+using System.Security.Principal;
 
-static void Main(string[] args)
+namespace IconController
 {
-    // 在Application.Run之前添加
-    debugWindow = new DebugWindow();
-    debugWindow.Show(); // 默认显示调试窗口
-    
-    // 在关键位置添加日志
-    debugWindow.AddLog("程序启动");
-    debugWindow.AddLog($"单实例检查: {(createdNew ? "通过" : "已有实例运行")}");
-    
-    // ... 其他代码不变 ...
-    
-    // 在finally块添加
-    finally
+    class Program
     {
-        debugWindow?.AddLog("程序退出");
-    }
-}
-
-// 修改托盘菜单创建
-private static void CreateTrayIcon()
-{
-    // ... 原有代码 ...
-    
-    // 添加调试窗口菜单项
-    ToolStripMenuItem debugItem = new ToolStripMenuItem("调试窗口");
-    debugItem.Click += (s, e) => 
-    {
-        if (debugWindow != null)
+        // Win32 API
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+        [DllImport("kernel32.dll")]
+        private static extern IntPtr GetConsoleWindow();
+        [DllImport("shell32.dll", CharSet = CharSet.Auto)]
+        private static extern int ShellExecute(IntPtr hwnd, string lpOperation, string lpFile, string lpParameters, string lpDirectory, int nShowCmd);
+        
+        private const int SW_HIDE = 0;
+        private const int SW_SHOW = 5;
+        
+        private static readonly string APP_NAME = "IconController";
+        private static readonly string REG_KEY = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
+        
+        private static Mutex mutex;
+        private static NotifyIcon trayIcon;
+        public static DebugWindow debugWindow;
+        
+        [STAThread]
+        static void Main(string[] args)
         {
-            debugWindow.Show();
-            debugWindow.BringToFront();
+            try
+            {
+                // 检查管理员权限
+                if (!IsRunAsAdmin())
+                {
+                    RequestAdminPrivileges();
+                    return;
+                }
+                
+                // 隐藏控制台窗口
+                IntPtr consoleWindow = GetConsoleWindow();
+                if (consoleWindow != IntPtr.Zero)
+                {
+                    ShowWindow(consoleWindow, SW_HIDE);
+                }
+                
+                // 创建调试窗口
+                debugWindow = new DebugWindow();
+                debugWindow.AddLog("=== IconController 启动 ===");
+                debugWindow.AddLog($"版本: {Application.ProductVersion}");
+                debugWindow.AddLog($"系统: {Environment.OSVersion.VersionString}");
+                
+                // 单实例检查
+                mutex = new Mutex(true, "Global\\" + APP_NAME, out bool createdNew);
+                if (!createdNew)
+                {
+                    debugWindow.AddLog("错误: 程序已在运行中");
+                    MessageBox.Show("程序已在运行中，请检查系统托盘", APP_NAME, 
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+                
+                debugWindow.AddLog("单实例检查通过");
+                
+                // 创建托盘图标
+                CreateTrayIcon();
+                
+                // 添加到开机启动
+                AddToStartup();
+                
+                debugWindow.AddLog("创建隐藏窗口...");
+                
+                // 创建隐藏窗口并运行
+                Application.Run(new HiddenForm());
+            }
+            catch (Exception ex)
+            {
+                string error = $"启动失败: {ex.Message}\n\n{ex.StackTrace}";
+                debugWindow?.AddLog(error);
+                MessageBox.Show(error, "严重错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                debugWindow?.AddLog("程序退出");
+                trayIcon?.Dispose();
+                mutex?.ReleaseMutex();
+                mutex?.Dispose();
+            }
         }
-    };
-    menu.Items.Add(debugItem);
+        
+        // 检查是否以管理员权限运行
+        private static bool IsRunAsAdmin()
+        {
+            try
+            {
+                using (WindowsIdentity identity = WindowsIdentity.GetCurrent())
+                {
+                    WindowsPrincipal principal = new WindowsPrincipal(identity);
+                    bool isAdmin = principal.IsInRole(WindowsBuiltInRole.Administrator);
+                    
+                    debugWindow?.AddLog($"管理员权限: {(isAdmin ? "是" : "否")}");
+                    return isAdmin;
+                }
+            }
+            catch
+            {
+                return false;
+            }
+        }
+        
+        // 请求管理员权限
+        private static void RequestAdminPrivileges()
+        {
+            try
+            {
+                ProcessStartInfo startInfo = new ProcessStartInfo
+                {
+                    FileName = Application.ExecutablePath,
+                    UseShellExecute = true,
+                    Verb = "runas" // 请求管理员权限
+                };
+                
+                Process.Start(startInfo);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"请求管理员权限失败: {ex.Message}\n\n请右键点击程序，选择'以管理员身份运行'", 
+                    "权限错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+        
+        private static void CreateTrayIcon()
+        {
+            try
+            {
+                trayIcon = new NotifyIcon();
+                trayIcon.Icon = SystemIcons.Shield; // 使用盾牌图标表示管理员权限
+                trayIcon.Text = "桌面图标控制器 - Alt+Ctrl+Q";
+                trayIcon.Visible = true;
+                
+                // 右键菜单
+                ContextMenuStrip menu = new ContextMenuStrip();
+                
+                ToolStripMenuItem debugItem = new ToolStripMenuItem("调试窗口");
+                debugItem.Click += (s, e) => 
+                {
+                    if (debugWindow != null)
+                    {
+                        debugWindow.Show();
+                        debugWindow.BringToFront();
+                    }
+                };
+                menu.Items.Add(debugItem);
+                
+                ToolStripMenuItem restartItem = new ToolStripMenuItem("重启资源管理器");
+                restartItem.Click += (s, e) => 
+                {
+                    try
+                    {
+                        debugWindow?.AddLog("手动重启资源管理器...");
+                        foreach (var process in Process.GetProcessesByName("explorer"))
+                        {
+                            process.Kill();
+                        }
+                        Process.Start("explorer.exe");
+                        debugWindow?.AddLog("资源管理器已重启");
+                    }
+                    catch (Exception ex)
+                    {
+                        debugWindow?.AddLog($"重启资源管理器失败: {ex.Message}");
+                    }
+                };
+                menu.Items.Add(restartItem);
+                
+                menu.Items.Add(new ToolStripSeparator());
+                
+                ToolStripMenuItem exitItem = new ToolStripMenuItem("退出");
+                exitItem.Click += (s, e) => Application.Exit();
+                menu.Items.Add(exitItem);
+                
+                trayIcon.ContextMenuStrip = menu;
+                
+                // 双击托盘图标显示调试窗口
+                trayIcon.DoubleClick += (s, e) => 
+                {
+                    if (debugWindow != null)
+                    {
+                        debugWindow.Show();
+                        debugWindow.BringToFront();
+                    }
+                };
+                
+                debugWindow?.AddLog("托盘图标创建成功");
+            }
+            catch (Exception ex)
+            {
+                debugWindow?.AddLog($"创建托盘图标失败: {ex.Message}");
+            }
+        }
+        
+        private static void AddToStartup()
+        {
+            try
+            {
+                string exePath = Application.ExecutablePath;
+                debugWindow?.AddLog($"程序路径: {exePath}");
+                
+                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(REG_KEY, true))
+                {
+                    if (key?.GetValue(APP_NAME) == null)
+                    {
+                        key?.SetValue(APP_NAME, $"\"{exePath}\"");
+                        debugWindow?.AddLog("已添加到开机启动");
+                    }
+                    else
+                    {
+                        debugWindow?.AddLog("开机启动项已存在");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                debugWindow?.AddLog($"添加开机启动失败: {ex.Message}");
+            }
+        }
+    }
 }
