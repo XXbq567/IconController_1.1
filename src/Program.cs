@@ -7,6 +7,7 @@ using System.Drawing;
 using System.IO;
 using Microsoft.Win32;
 using System.Security.Principal;
+using System.Linq;
 
 namespace IconController
 {
@@ -35,13 +36,6 @@ namespace IconController
         {
             try
             {
-                // 检查管理员权限
-                if (!IsRunAsAdmin())
-                {
-                    RequestAdminPrivileges();
-                    return;
-                }
-                
                 // 隐藏控制台窗口
                 IntPtr consoleWindow = GetConsoleWindow();
                 if (consoleWindow != IntPtr.Zero)
@@ -55,6 +49,11 @@ namespace IconController
                 debugWindow.AddLog($"版本: {Application.ProductVersion}");
                 debugWindow.AddLog($"系统: {Environment.OSVersion.VersionString}");
                 
+                // 检查是否已经是提升的实例
+                bool isElevated = args.Contains("--elevated");
+                debugWindow.AddLog($"启动参数: {string.Join(" ", args)}");
+                debugWindow.AddLog($"提升权限启动: {(isElevated ? "是" : "否")}");
+                
                 // 单实例检查
                 mutex = new Mutex(true, "Global\\" + APP_NAME, out bool createdNew);
                 if (!createdNew)
@@ -66,6 +65,16 @@ namespace IconController
                 }
                 
                 debugWindow.AddLog("单实例检查通过");
+                
+                // 检查管理员权限（如果是通过--elevated启动则跳过）
+                if (!isElevated && !IsRunAsAdmin())
+                {
+                    debugWindow.AddLog("需要管理员权限，请求提升...");
+                    RequestAdminPrivileges();
+                    return;
+                }
+                
+                debugWindow.AddLog($"管理员权限: {(IsRunAsAdmin() ? "是" : "否")}");
                 
                 // 创建托盘图标
                 CreateTrayIcon();
@@ -87,6 +96,7 @@ namespace IconController
             finally
             {
                 debugWindow?.AddLog("程序退出");
+                trayIcon?.Visible = false;
                 trayIcon?.Dispose();
                 mutex?.ReleaseMutex();
                 mutex?.Dispose();
@@ -101,10 +111,7 @@ namespace IconController
                 using (WindowsIdentity identity = WindowsIdentity.GetCurrent())
                 {
                     WindowsPrincipal principal = new WindowsPrincipal(identity);
-                    bool isAdmin = principal.IsInRole(WindowsBuiltInRole.Administrator);
-                    
-                    debugWindow?.AddLog($"管理员权限: {(isAdmin ? "是" : "否")}");
-                    return isAdmin;
+                    return principal.IsInRole(WindowsBuiltInRole.Administrator);
                 }
             }
             catch
@@ -122,13 +129,16 @@ namespace IconController
                 {
                     FileName = Application.ExecutablePath,
                     UseShellExecute = true,
-                    Verb = "runas" // 请求管理员权限
+                    Verb = "runas",
+                    Arguments = "--elevated"
                 };
                 
                 Process.Start(startInfo);
+                Environment.Exit(0); // 退出当前非管理员实例
             }
             catch (Exception ex)
             {
+                debugWindow?.AddLog($"请求管理员权限失败: {ex.Message}");
                 MessageBox.Show($"请求管理员权限失败: {ex.Message}\n\n请右键点击程序，选择'以管理员身份运行'", 
                     "权限错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
