@@ -94,10 +94,19 @@ namespace IconController
             finally
             {
                 Log("程序退出");
-                trayIcon?.Visible = false;
-                trayIcon?.Dispose();
-                mutex?.ReleaseMutex();
-                mutex?.Dispose();
+                
+                // 修复空条件赋值问题
+                if (trayIcon != null)
+                {
+                    trayIcon.Visible = false;
+                    trayIcon.Dispose();
+                }
+                
+                if (mutex != null)
+                {
+                    mutex.ReleaseMutex();
+                    mutex.Dispose();
+                }
             }
         }
         
@@ -228,14 +237,17 @@ namespace IconController
                 
                 using (RegistryKey key = Registry.CurrentUser.OpenSubKey(REG_KEY, true))
                 {
-                    if (key?.GetValue(APP_NAME) == null)
+                    if (key != null)
                     {
-                        key?.SetValue(APP_NAME, $"\"{exePath}\"");
-                        Log("已添加到开机启动");
-                    }
-                    else
-                    {
-                        Log("开机启动项已存在");
+                        if (key.GetValue(APP_NAME) == null)
+                        {
+                            key.SetValue(APP_NAME, $"\"{exePath}\"");
+                            Log("已添加到开机启动");
+                        }
+                        else
+                        {
+                            Log("开机启动项已存在");
+                        }
                     }
                 }
             }
